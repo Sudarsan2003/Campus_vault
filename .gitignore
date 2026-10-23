@@ -1,0 +1,29 @@
+# Secrets
+.env
+**/.env
+*.pem
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Blockchain build artifacts
+**/artifacts/
+**/cache/
+**/typechain-types/
+anvil-state.json
+
+# Build output
+dist/
+build/
+.next/
+
+# OS / editor
+.DS_Store
+.vscode/

@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-paper font-sans text-ink-900 antialiased;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-chain;
+  }
+}
+
+@layer components {
+  .field-input {
+    @apply block w-full rounded-lg border border-paper-300 bg-white px-3.5 py-2.5 text-[15px] text-ink-900 placeholder:text-ink-400 transition-colors;
+    @apply focus:border-chain focus:outline-none focus:ring-2 focus:ring-chain/25;
+  }
+  .field-input[aria-invalid='true'] {
+    @apply border-alert focus:border-alert focus:ring-alert/25;
+  }
+  .btn-primary {
+    @apply inline-flex w-full items-center justify-center gap-2 rounded-lg bg-chain px-4 py-2.5 text-[15px] font-semibold text-white transition-colors;
+    @apply hover:bg-chain-dark disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-quiet {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-paper-300 bg-white px-3.5 py-2 text-sm font-medium text-ink-900 transition-colors hover:bg-paper-200;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
