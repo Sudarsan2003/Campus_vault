@@ -6,6 +6,7 @@ import AssetsTab from '../components/assets/AssetsTab.jsx';
 import LoansTab from '../components/assets/LoansTab.jsx';
 import LedgerTab from '../components/assets/LedgerTab.jsx';
 import ReportsTab from '../components/reports/ReportsTab.jsx';
+import SecurityLab from '../components/admin/SecurityLab.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { assetService } from '../services/assetService.js';
 import { reportService } from '../services/reportService.js';
@@ -111,7 +112,7 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-6 flex gap-6 overflow-x-auto border-b border-paper-300" role="tablist">
-          {TABS.map((t) => (
+          {(user.role === 'ADMIN' ? [...TABS, 'Security lab'] : TABS).map((t) => (
             <button
               key={t}
               role="tab"
@@ -131,6 +132,7 @@ export default function Dashboard() {
           {tab === 'Lost & found' && <ReportsTab reports={data.reports} user={user} run={run} busy={busy} />}
           {tab === 'My loans' && <LoansTab loans={data.loans} overdue={data.overdue} user={user} run={run} busy={busy} />}
           {tab === 'Ledger' && <LedgerTab entries={data.ledger} />}
+          {tab === 'Security lab' && user.role === 'ADMIN' && <SecurityLab />}
         </div>
       </main>
     </div>
