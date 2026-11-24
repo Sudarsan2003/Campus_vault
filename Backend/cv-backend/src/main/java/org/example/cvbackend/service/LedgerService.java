@@ -1,6 +1,7 @@
 package org.example.cvbackend.service;
 
 import org.example.cvbackend.blockchain.BlockchainService;
+import org.example.cvbackend.blockchain.ChainVerifier;
 import org.example.cvbackend.blockchain.BlockchainService.TxResult;
 import org.example.cvbackend.dto.AssetDtos.LedgerResponse;
 import org.example.cvbackend.dto.AssetDtos.WalletResponse;
@@ -23,10 +24,12 @@ public class LedgerService {
     private final LedgerEntryRepository entries;
     private final BlockchainService chain;
     private final long depositTokens;
+    private final ChainVerifier verifier;
 
-    public LedgerService(LedgerEntryRepository entries, BlockchainService chain,
+    public LedgerService(LedgerEntryRepository entries, BlockchainService chain, ChainVerifier verifier,
                          @Value("${app.blockchain.deposit-tokens}") long depositTokens) {
         this.entries = entries;
+        this.verifier = verifier;
         this.chain = chain;
         this.depositTokens = depositTokens;
     }
@@ -41,7 +44,10 @@ public class LedgerService {
         List<LedgerEntry> rows = assetId == null
                 ? entries.findTop50ByOrderByIdDesc()
                 : entries.findByAssetIdOrderByIdDesc(assetId);
-        return rows.stream().map(LedgerResponse::from).toList();
+        boolean up = verifier.reachable();
+        return rows.stream()
+                .map(e -> LedgerResponse.from(e, up ? verifier.ledgerEntry(e) : ChainVerifier.Check.unavailable()))
+                .toList();
     }
 
     public WalletResponse wallet(Long userId) {

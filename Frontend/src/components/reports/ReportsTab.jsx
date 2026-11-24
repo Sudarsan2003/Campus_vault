@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ImagePlus, Loader2, Sparkles } from 'lucide-react';
 import AuthImage from './AuthImage.jsx';
+import ChainBadge, { ChainProblem } from '../ui/ChainBadge.jsx';
 import { reportService } from '../../services/reportService.js';
 import { parseApiError } from '../../lib/api.js';
 
@@ -222,11 +223,13 @@ function ReportCard({ report: r, reports, user, run, busy }) {
                 {r.kind === 'LOST' ? 'Lost' : 'Found'}
               </span>
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}>{s.label}</span>
+              <ChainBadge status={r.chainStatus} detail={r.chainDetail} />
             </div>
           </div>
           <p className="mt-0.5 text-[13px] text-ink-600">
             {r.category} · {r.location} · {new Date(r.eventDate).toLocaleDateString()} · {mine ? 'You' : r.reporterName}
           </p>
+          <ChainProblem status={r.chainStatus} detail={r.chainDetail} />
           {r.description && <p className="mt-1.5 text-[14px] text-ink-800">{r.description}</p>}
           {r.matchedWithCode && (
             <p className="mt-1.5 text-[13px] text-ink-600">
@@ -251,7 +254,7 @@ function ReportCard({ report: r, reports, user, run, busy }) {
             {searchError && <p className="mt-3 text-[14px] text-alert">{searchError}</p>}
 
             {suggestions && suggestions.length === 0 && (
-              <p className="mt-3 text-[14px] text-ink-600">No similar found items yet. Check back when more are reported.</p>
+              <p className="mt-3 text-[14px] text-ink-600">No found items look similar enough yet. Matches need a close photo, and a found date no earlier than the day before you lost it. Check back when more are reported.</p>
             )}
 
             {suggestions && suggestions.length > 0 && (

@@ -1,6 +1,7 @@
 package org.example.cvbackend.service;
 
 import org.example.cvbackend.blockchain.BlockchainService;
+import org.example.cvbackend.blockchain.ChainVerifier;
 import org.example.cvbackend.blockchain.BlockchainService.TxResult;
 import org.example.cvbackend.dto.AssetDtos.AssetResponse;
 import org.example.cvbackend.dto.AssetDtos.CreateAssetRequest;
@@ -20,16 +21,31 @@ public class AssetService {
     private final AssetRepository assets;
     private final BlockchainService chain;
     private final LedgerService ledger;
+    private final ChainVerifier verifier;
 
-    public AssetService(AssetRepository assets, BlockchainService chain, LedgerService ledger) {
+    public AssetService(AssetRepository assets, BlockchainService chain, LedgerService ledger, ChainVerifier verifier) {
         this.assets = assets;
+        this.verifier = verifier;
         this.chain = chain;
         this.ledger = ledger;
     }
 
+    /** Refuses to act on an asset whose database record no longer matches what was written on-chain. */
+    public void requireMatchesChain(Asset a) {
+        ChainVerifier.Check c = verifier.asset(a);
+        if (c.status() == ChainVerifier.Status.MISMATCH) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This asset's record doesn't match the blockchain (" + c.detail().toLowerCase().replace(".", "")
+                            + "), so it can't be verified or borrowed.");
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<AssetResponse> list() {
-        return assets.findAllByOrderByCreatedAtDesc().stream().map(AssetResponse::from).toList();
+        boolean up = verifier.reachable();
+        return assets.findAllByOrderByCreatedAtDesc().stream()
+                .map(a -> AssetResponse.from(a, up ? verifier.asset(a) : ChainVerifier.Check.unavailable()))
+                .toList();
     }
 
     @Transactional
@@ -57,6 +73,7 @@ public class AssetService {
         if (a.getStatus() != Asset.Status.PENDING) {
             throw new ApiException(HttpStatus.CONFLICT, "This asset is already verified.");
         }
+        requireMatchesChain(a);
         TxResult tx = chain.verifyAsset(a.getId());
         a.setStatus(Asset.Status.AVAILABLE);
         ledger.record("Ownership verified", "Verified by admin · " + a.getCode(), a.getId(), tx);

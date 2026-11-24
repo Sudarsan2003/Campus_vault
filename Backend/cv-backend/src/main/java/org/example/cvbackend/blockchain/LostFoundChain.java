@@ -24,6 +24,10 @@ public class LostFoundChain {
         this.address = address;
     }
 
+    public String address() {
+        return address;
+    }
+
     public String hash(String text) {
         return chain.hash(text);
     }
