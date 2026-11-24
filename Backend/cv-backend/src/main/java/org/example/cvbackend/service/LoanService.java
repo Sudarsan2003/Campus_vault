@@ -47,6 +47,11 @@ public class LoanService {
         this.depositTokens = depositTokens;
     }
 
+    /** Why verifying a return is refused when the loan fails the chain check (also shown by the Security lab). */
+    public static String settleRefusal(ChainVerifier.Check check) {
+        return "This loan doesn't match the blockchain: " + check.detail() + " Ask an administrator to investigate.";
+    }
+
     @Transactional(readOnly = true)
     public List<LoanResponse> mine(Long userId) {
         return toResponses(loans.findInvolving(userId));
@@ -116,8 +121,7 @@ public class LoanService {
         }
         ChainVerifier.Check check = verifier.loan(loan);
         if (check.status() == ChainVerifier.Status.MISMATCH) {
-            throw new ApiException(HttpStatus.CONFLICT,
-                    "This loan doesn't match the blockchain: " + check.detail() + " Ask an administrator to investigate.");
+            throw new ApiException(HttpStatus.CONFLICT, settleRefusal(check));
         }
 
         // The contract decides the split (late fee or damage); we record what it actually did.

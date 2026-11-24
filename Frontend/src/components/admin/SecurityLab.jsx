@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Loader2, ShieldAlert, ShieldCheck, Swords } from 'lucide-react';
+import { Ban, CheckCircle2, Loader2, ShieldAlert, ShieldCheck, Swords } from 'lucide-react';
+import ChainBadge from '../ui/ChainBadge.jsx';
 import Alert from '../ui/Alert.jsx';
 import { assetService } from '../../services/assetService.js';
 import { parseApiError } from '../../lib/api.js';
@@ -12,6 +13,42 @@ const FIELDS = [
 ];
 
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
+
+// What CampusVault shows afterwards: the database still has the loan open, the verifier compares it with the chain.
+function DetectionPanel({ d }) {
+  const bad = d.status === 'MISMATCH';
+  const SettleIcon = d.settleRefused ? Ban : CheckCircle2;
+  return (
+    <div className={`mt-4 rounded-lg border p-3 ${bad ? 'border-alert/40 bg-alert-soft/40' : 'border-paper-300 bg-paper'}`}>
+      <p className="text-[12px] font-medium uppercase tracking-wide text-ink-400">Detection in CampusVault</p>
+      <table className="mt-1.5 w-full text-[14px]">
+        <tbody>
+          <tr>
+            <td className="py-1 text-ink-600">Database (My loans)</td>
+            <td className="py-1">{d.databaseSays}</td>
+          </tr>
+          <tr className="border-t border-paper-200">
+            <td className="py-1 text-ink-600">Blockchain</td>
+            <td className={`py-1 ${bad ? 'font-semibold text-alert' : ''}`}>{d.chainSays}</td>
+          </tr>
+          <tr className="border-t border-paper-200">
+            <td className="py-1 text-ink-600">Chain verifier</td>
+            <td className="py-1"><ChainBadge status={d.status} detail={d.detail} /></td>
+          </tr>
+        </tbody>
+      </table>
+      {bad && <p className="mt-1.5 text-[13px] text-alert">{d.detail}</p>}
+      <p className={`mt-2 flex items-start gap-1.5 text-[13px] ${d.settleRefused ? 'text-alert' : 'text-verified'}`}>
+        <SettleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span title={d.settleMessage}>
+          {d.settleRefused
+            ? 'Verify return refused: the owner can’t settle this loan until an administrator investigates.'
+            : d.settleMessage}
+        </span>
+      </p>
+    </div>
+  );
+}
 
 function RunCard({ run }) {
   const ok = run.attackSucceeded;
@@ -55,6 +92,7 @@ function RunCard({ run }) {
         contract {short(run.contractAddress)} · operator {short(run.operator)} · attacker {short(run.attacker)}
         {run.txHash && ` · tx ${short(run.txHash)} · block ${run.blockNumber} · gas ${run.gasUsed.toLocaleString()}`}
       </p>
+      {run.detection && <DetectionPanel d={run.detection} />}
     </section>
   );
 }
@@ -109,7 +147,7 @@ export default function SecurityLab() {
             <ul className="mt-1.5 list-disc space-y-1 pl-5">
               <li>Vulnerable copy: one transaction closes the loan, refunds the deposit and lists the item as available, while the borrower still has it.</li>
               <li>Real contract: the same call reverts with “Only the operator”, and nothing changes.</li>
-              <li>Detection: if a real loan were ever closed this way, My loans would flag it “Doesn’t match chain” and block settling it.</li>
+              <li>Detection: the attack skipped the app, so CampusVault’s database still says the loan is open. The chain verifier (the same check My loans uses) sees it closed on-chain, flags it “Doesn’t match chain” and refuses to verify the return.</li>
             </ul>
           </div>
         </>

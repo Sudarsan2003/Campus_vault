@@ -156,7 +156,7 @@ cd Blockchain
 npx hardhat run scripts/attack-demo.js
 ```
 
-**In the app:** sign in as admin and open the **Security lab** tab, then click **Run attack**. The back end deploys fresh throwaway copies of both contracts (using Anvil test accounts #2 and #1, never the real operator key or contracts) and shows the before/after state side by side. It runs only on chain 31337. After changing either contract, run `npm run export-bytecode` in `Blockchain` so the lab uses the new bytecode.
+**In the app:** sign in as admin and open the **Security lab** tab, then click **Run attack**. The back end deploys fresh throwaway copies of both contracts (using Anvil test accounts #2 and #1, never the real operator key or contracts) and shows the before/after state side by side. Under each card, **Detection in CampusVault** runs the same loan check My loans uses (`ChainVerifier`) against that contract, with the loan as the app's database would still hold it (open): on the vulnerable copy it shows **Doesn't match chain** and refuses to verify the return; on the real contract it shows **On-chain**. It runs only on chain 31337. After changing either contract, run `npm run export-bytecode` in `Blockchain` so the lab uses the new bytecode.
 
 On the vulnerable copy, an outside wallet closes a loan whose item was never returned: the loan is closed, the deposit is refunded and the item is shown as available. The real contract rejects the same call with "Only the operator". `npm test` includes these attack tests, plus a regression test that every state-changing function rejects non-operators.
 
