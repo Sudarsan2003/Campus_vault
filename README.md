@@ -160,7 +160,50 @@ npx hardhat run scripts/attack-demo.js
 
 On the vulnerable copy, an outside wallet closes a loan whose item was never returned: the loan is closed, the deposit is refunded and the item is shown as available. The real contract rejects the same call with "Only the operator". `npm test` includes these attack tests, plus a regression test that every state-changing function rejects non-operators.
 
-In the running app, the chain verifier also compares every loan with `loans(id)` on the contract. A loan that is open in the database but closed on-chain is shown as **Doesn't match chain** ("Closed on the blockchain without a return verified in CampusVault"), and settling it is refused. To reproduce live, deploy `scripts/deploy-vulnerable.js` to a throwaway Anvil chain, point `app.blockchain.contract-address` at it, borrow an item, and call `returnAsset` from another Anvil account with `cast send`.
+In the running app, the chain verifier also compares every loan with `loans(id)` on the contract. A loan that is open in the database but closed on-chain is shown as **Doesn't match chain** ("Closed on the blockchain without a return verified in CampusVault"), and settling it is refused.
+
+### Live attack between two accounts (attack environment)
+
+Runs the whole app against `CampusVaultVulnerable` with its own database (`campusvault_attack`), so a real owner and a real borrower lend and borrow in the app, and the borrower attacks from their own wallet. The real contracts and the `campusvault` database are not touched.
+
+One-time setup, with Anvil running:
+
+```bash
+createdb campusvault_attack
+cd Blockchain
+npx hardhat run scripts/deploy-attack-env.js --network localhost
+```
+
+This deploys a fresh LostFound and `CampusVaultVulnerable` and writes their addresses to `Backend/cv-backend/attack-env.properties`.
+
+Start the backend in attack mode instead of the normal one:
+
+```bash
+cd Backend/cv-backend
+./mvnw spring-boot:run -Dspring-boot.run.profiles=attack
+```
+
+Then, in the app:
+
+1. Sign in as `student@campus.edu` (owner) and add an item; sign in as `admin@campus.edu` and verify it.
+2. Register a second student, the borrower (e.g. `borrower@campus.edu`, password `Borrower@123`), click **Get test tokens** and borrow the item. The borrower now has 4,000 tokens.
+3. The borrower attacks from their own wallet (Anvil account #1), bypassing the app:
+
+   ```bash
+   cd Blockchain
+   ./scripts/attack-loan.sh 1
+   ```
+
+   The loan closes on-chain (`open=false`); the transaction's `from` is not the contract's operator.
+4. Owner → **My loans**: the loan shows **Doesn't match chain** with the reason, and **Verify return** is refused (HTTP 409). Borrower: 5,000 tokens, deposit back, item kept. Ledger: no entry for the attack.
+
+The same call against the real contract reverts (dry run, nothing sent):
+
+```bash
+cast call 0x59b670e9fA9D0A427751Af201D676719a970857b "returnAsset(uint256,bool)" 1 false --from 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+```
+
+Back to normal: stop the backend and start it again without the profile, then sign out and in again. To run the demo again from scratch: `dropdb campusvault_attack && createdb campusvault_attack` and run `deploy-attack-env.js` again.
 
 ## AI match threshold
 

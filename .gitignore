@@ -27,3 +27,7 @@ build/
 # OS / editor
 .DS_Store
 .vscode/
+
+# Security experiment: attack environment
+Backend/cv-backend/attack-env.properties
+Backend/cv-backend/uploads-attack/
