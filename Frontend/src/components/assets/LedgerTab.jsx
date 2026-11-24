@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import ChainBadge from '../ui/ChainBadge.jsx';
 
 const short = (h) => `${h.slice(0, 8)}…${h.slice(-6)}`;
 
@@ -20,10 +20,10 @@ export default function LedgerTab({ entries }) {
               <p className="text-[15px] font-medium">{e.title}</p>
               <p className="truncate text-[13px] text-ink-600">{e.detail}</p>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-verified/15 px-2 py-0.5 text-xs font-medium text-verified">
-              <Check className="h-3 w-3" aria-hidden /> Confirmed
-            </span>
+            <ChainBadge status={e.chainStatus} detail={e.chainDetail}
+              labels={{ VERIFIED: 'Confirmed on chain', MISMATCH: 'Not on chain' }} />
           </div>
+          {e.chainStatus === 'MISMATCH' && <p className="mt-1 text-[13px] text-alert">{e.chainDetail}</p>}
           <p className="mt-2 font-mono text-xs text-ink-400">
             {short(e.txHash)} · block {e.blockNumber.toLocaleString()} · {new Date(e.createdAt).toLocaleString()}
           </p>

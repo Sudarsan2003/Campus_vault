@@ -16,27 +16,28 @@ const TABS = ['Assets', 'Lost & found', 'My loans', 'Ledger'];
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [tab, setTab] = useState('Assets');
-  const [data, setData] = useState({ assets: [], loans: [], ledger: [], reports: [], wallet: null });
+  const [data, setData] = useState({ assets: [], loans: [], overdue: [], ledger: [], reports: [], wallet: null });
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const [assets, loans, ledger, reports, wallet] = await Promise.all([
+      const [assets, loans, overdue, ledger, reports, wallet] = await Promise.all([
         assetService.list(),
         assetService.loans(),
+        user.role === 'ADMIN' ? assetService.overdueLoans() : [],
         assetService.ledger(),
         reportService.list(),
         assetService.wallet().catch(() => null), // the wallet needs the chain; the rest doesn't
       ]);
-      setData({ assets, loans, ledger, reports, wallet });
+      setData({ assets, loans, overdue, ledger, reports, wallet });
     } catch (err) {
       setError(parseApiError(err).message);
     } finally {
       setLoaded(true);
     }
-  }, []);
+  }, [user.role]);
 
   useEffect(() => {
     refresh();
@@ -62,6 +63,7 @@ export default function Dashboard() {
   );
 
   const { wallet } = data;
+  const myOverdue = data.loans.filter((l) => l.overdue && l.borrowerId === user.id);
 
   return (
     <div className="min-h-screen">
@@ -97,6 +99,14 @@ export default function Dashboard() {
 
         <div className="mt-6 space-y-3">
           {error && <Alert>{error}</Alert>}
+          {myOverdue.length > 0 && (
+            <Alert>
+              {myOverdue.length === 1
+                ? `${myOverdue[0].assetName} was due ${myOverdue[0].daysOverdue} day${myOverdue[0].daysOverdue === 1 ? '' : 's'} ago.`
+                : `You have ${myOverdue.length} overdue loans.`}{' '}
+              A late fee of 10% of the deposit is kept for each day late, and you can't borrow anything else until it's returned.
+            </Alert>
+          )}
           {loaded && !wallet && <Alert>Can't reach the blockchain node. Start it with `anvil --state anvil-state.json`, then reload.</Alert>}
         </div>
 
@@ -119,7 +129,7 @@ export default function Dashboard() {
         <div className="mt-6">
           {tab === 'Assets' && <AssetsTab assets={data.assets} user={user} run={run} busy={busy} />}
           {tab === 'Lost & found' && <ReportsTab reports={data.reports} user={user} run={run} busy={busy} />}
-          {tab === 'My loans' && <LoansTab loans={data.loans} user={user} run={run} busy={busy} />}
+          {tab === 'My loans' && <LoansTab loans={data.loans} overdue={data.overdue} user={user} run={run} busy={busy} />}
           {tab === 'Ledger' && <LedgerTab entries={data.ledger} />}
         </div>
       </main>

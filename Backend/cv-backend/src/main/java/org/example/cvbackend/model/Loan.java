@@ -40,6 +40,14 @@ public class Loan {
     @Column(nullable = false)
     private boolean damaged;
 
+    /** Set once the overdue monitor has recorded this loan as overdue on-chain. */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean overdueFlagged;
+
+    /** Tokens kept from the deposit for a late return (0 if on time or damaged). */
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long lateFee;
+
     public Long getId() { return id; }
     public Asset getAsset() { return asset; }
     public void setAsset(Asset asset) { this.asset = asset; }
@@ -56,4 +64,11 @@ public class Loan {
     public void setReturnedAt(Instant returnedAt) { this.returnedAt = returnedAt; }
     public boolean isDamaged() { return damaged; }
     public void setDamaged(boolean damaged) { this.damaged = damaged; }
+    public boolean isOverdueFlagged() { return overdueFlagged; }
+    public void setOverdueFlagged(boolean overdueFlagged) { this.overdueFlagged = overdueFlagged; }
+    public long getLateFee() { return lateFee; }
+    public void setLateFee(long lateFee) { this.lateFee = lateFee; }
+
+    /** Open and past its due date at the given (chain) time. */
+    public boolean isOverdueAt(Instant now) { return status == Status.OPEN && now.isAfter(dueAt); }
 }

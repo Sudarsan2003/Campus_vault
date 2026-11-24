@@ -74,6 +74,11 @@ public class FileStorageService {
         }
     }
 
+    /** SHA-256 of the stored photo as it is on disk now. */
+    public String sha256Of(String filename) {
+        return sha256(load(filename));
+    }
+
     public String contentTypeOf(String filename) {
         String ext = filename.substring(filename.lastIndexOf('.') + 1);
         return CONTENT_TYPES.getOrDefault(ext, "application/octet-stream");

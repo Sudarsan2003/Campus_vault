@@ -2,6 +2,7 @@ package org.example.cvbackend.service;
 
 import org.example.cvbackend.ai.EmbeddingClient;
 import org.example.cvbackend.blockchain.BlockchainService.TxResult;
+import org.example.cvbackend.blockchain.ChainVerifier;
 import org.example.cvbackend.blockchain.LostFoundChain;
 import org.example.cvbackend.dto.ReportDtos.ReportResponse;
 import org.example.cvbackend.dto.ReportDtos.SuggestionResponse;
@@ -35,22 +36,36 @@ public class ReportService {
     private final LostFoundChain chain;
     private final LedgerService ledger;
     private final EmbeddingClient embeddings;
+    private final ChainVerifier verifier;
     private final double minScore;
+    private final double crossCategoryMinScore;
+    private final double strongScore;
+    private final double likelyScore;
 
     public ReportService(ReportRepository reports, FileStorageService files, LostFoundChain chain,
-                         LedgerService ledger, EmbeddingClient embeddings,
-                         @Value("${app.ai.min-score}") double minScore) {
+                         LedgerService ledger, EmbeddingClient embeddings, ChainVerifier verifier,
+                         @Value("${app.ai.min-score}") double minScore,
+                         @Value("${app.ai.cross-category-min-score}") double crossCategoryMinScore,
+                         @Value("${app.ai.strong-score}") double strongScore,
+                         @Value("${app.ai.likely-score}") double likelyScore) {
         this.reports = reports;
         this.files = files;
         this.chain = chain;
         this.ledger = ledger;
         this.embeddings = embeddings;
+        this.verifier = verifier;
         this.minScore = minScore;
+        this.crossCategoryMinScore = crossCategoryMinScore;
+        this.strongScore = strongScore;
+        this.likelyScore = likelyScore;
     }
 
     @Transactional(readOnly = true)
     public List<ReportResponse> list() {
-        return reports.findAllByOrderByCreatedAtDesc().stream().map(ReportResponse::from).toList();
+        boolean up = verifier.reachable();
+        return reports.findAllByOrderByCreatedAtDesc().stream()
+                .map(r -> ReportResponse.from(r, up ? verifier.report(r) : ChainVerifier.Check.unavailable()))
+                .toList();
     }
 
     @Transactional
@@ -111,7 +126,13 @@ public class ReportService {
         }
     }
 
-    /** Open reports of the opposite kind, ranked by how similar their photos look. */
+    /**
+     * Open reports of the opposite kind, ranked by how similar their photos look.
+     * A candidate is shown only if
+     *  - its photo similarity reaches app.ai.min-score (same category) or
+     *    app.ai.cross-category-min-score (different category, in case someone picked the wrong one), and
+     *  - the dates make sense: an item can't be found more than a day before it was lost.
+     */
     @Transactional
     public List<SuggestionResponse> suggestions(User actor, Long id) {
         Report r = reports.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Report not found."));
@@ -129,19 +150,31 @@ public class ReportService {
         Report.Kind wanted = r.getKind() == Report.Kind.LOST ? Report.Kind.FOUND : Report.Kind.LOST;
         return reports.findByKindAndStatus(wanted, Report.Status.OPEN).stream()
                 .filter(c -> !c.getReporter().getId().equals(r.getReporter().getId()))
+                .filter(c -> datesPlausible(r, c))
                 .map(c -> {
                     float[] v = vector(c);
                     return v == null ? null : new Scored(c, EmbeddingClient.cosine(base, v));
                 })
-                .filter(s -> s != null && s.score >= minScore)
+                .filter(s -> s != null && s.score >= threshold(r, s.report))
                 .sorted(Comparator.comparingDouble((Scored s) -> s.score).reversed())
                 .limit(MAX_SUGGESTIONS)
                 .map(s -> {
                     int pct = (int) Math.round(s.score * 100);
-                    String strength = pct >= 85 ? "Strong" : pct >= 75 ? "Likely" : "Possible";
+                    String strength = s.score >= strongScore ? "Strong" : s.score >= likelyScore ? "Likely" : "Possible";
                     return new SuggestionResponse(ReportResponse.from(s.report), pct, strength);
                 })
                 .toList();
+    }
+
+    private double threshold(Report a, Report b) {
+        return a.getCategory().equalsIgnoreCase(b.getCategory()) ? minScore : crossCategoryMinScore;
+    }
+
+    /** The found date may be at most one day before the lost date (allowing for a mistyped date). */
+    private static boolean datesPlausible(Report a, Report b) {
+        Report lost = a.getKind() == Report.Kind.LOST ? a : b;
+        Report found = lost == a ? b : a;
+        return !found.getEventDate().isBefore(lost.getEventDate().minusDays(1));
     }
 
     private record Scored(Report report, double score) {}

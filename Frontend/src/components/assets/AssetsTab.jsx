@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { assetService } from '../../services/assetService.js';
+import ChainBadge, { ChainProblem } from '../ui/ChainBadge.jsx';
 
 const CATEGORIES = ['Book', 'Laptop', 'Charger', 'Calculator', 'Lab equipment', 'Project material', 'Other'];
 const BORROW_DAYS = 7;
@@ -71,8 +72,10 @@ export default function AssetsTab({ assets, user, run, busy }) {
                 <p className="text-[13px] text-ink-600">
                   {a.category} · {mine ? 'Yours' : `Owner: ${a.ownerName}`}
                 </p>
+                <ChainProblem status={a.chainStatus} detail={a.chainDetail} />
               </div>
               <div className="flex items-center gap-2">
+                <ChainBadge status={a.chainStatus} detail={a.chainDetail} />
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}>{s.label}</span>
                 {user.role === 'ADMIN' && a.status === 'PENDING' && (
                   <button className="btn-quiet" disabled={busy} onClick={() => run(() => assetService.verify(a.id))}>
