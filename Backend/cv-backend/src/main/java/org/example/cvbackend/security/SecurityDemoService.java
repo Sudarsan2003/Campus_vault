@@ -1,6 +1,8 @@
 package org.example.cvbackend.security;
 
+import org.example.cvbackend.blockchain.ChainVerifier;
 import org.example.cvbackend.exception.ApiException;
+import org.example.cvbackend.service.LoanService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
@@ -45,9 +47,16 @@ public class SecurityDemoService {
 
     public record State(boolean loanOpen, String assetStatus, long borrowerTokens, long ownerTokens) {}
 
+    /**
+     * What CampusVault would show afterwards. The attack bypasses the app, so its database still holds the loan as
+     * open; the real chain verifier compares that record with the contract, and a mismatch blocks settling it.
+     */
+    public record Detection(String databaseSays, String chainSays, ChainVerifier.Status status, String detail,
+                            boolean settleRefused, String settleMessage) {}
+
     public record Run(String contract, String description, String contractAddress, String operator, String attacker,
                       State before, State after, boolean attackSucceeded, String outcome, String txHash,
-                      Long blockNumber, Long gasUsed) {}
+                      Long blockNumber, Long gasUsed, Detection detection) {}
 
     public record Result(String attack, List<Run> runs) {}
 
@@ -56,12 +65,15 @@ public class SecurityDemoService {
     private final boolean enabled;
     private final Credentials demoOperator;
     private final Credentials attacker;
+    private final ChainVerifier verifier;
 
-    public SecurityDemoService(@Value("${app.blockchain.rpc-url}") String rpcUrl,
+    public SecurityDemoService(ChainVerifier verifier,
+                               @Value("${app.blockchain.rpc-url}") String rpcUrl,
                                @Value("${app.blockchain.chain-id}") long chainId,
                                @Value("${app.security-demo.enabled:true}") boolean enabled,
                                @Value("${app.security-demo.operator-key}") String operatorKey,
                                @Value("${app.security-demo.attacker-key}") String attackerKey) {
+        this.verifier = verifier;
         this.web3j = Web3j.build(new HttpService(rpcUrl));
         this.chainId = chainId;
         this.enabled = enabled;
@@ -89,7 +101,8 @@ public class SecurityDemoService {
         send(op, address, fn("registerAsset", u(ASSET), u(OWNER), new Bytes32(new byte[32])));
         send(op, address, fn("verifyAsset", u(ASSET)));
         send(op, address, fn("grantTokens", u(BORROWER), u(GRANT)));
-        send(op, address, fn("borrow", u(LOAN), u(ASSET), u(BORROWER), u(DEPOSIT), u(chainTime() + 3 * 86_400)));
+        long dueAt = chainTime() + 3 * 86_400;
+        send(op, address, fn("borrow", u(LOAN), u(ASSET), u(BORROWER), u(DEPOSIT), u(dueAt)));
         State before = state(address);
 
         // The attack: a different account calls returnAsset directly, bypassing the app.
@@ -97,13 +110,28 @@ public class SecurityDemoService {
         String data = FunctionEncoder.encode(attack);
         String revert = simulate(attacker.getAddress(), address, data);
         if (revert != null) {
+            State after = state(address);
             return new Run(contractName, description, address, demoOperator.getAddress(), attacker.getAddress(),
-                    before, state(address), false, "Attack blocked: " + revert, null, null, null);
+                    before, after, false, "Attack blocked: " + revert, null, null, null, detect(address, dueAt, after));
         }
         TransactionReceipt r = send(new RawTransactionManager(web3j, attacker, chainId), address, attack);
+        State after = state(address);
         return new Run(contractName, description, address, demoOperator.getAddress(), attacker.getAddress(),
-                before, state(address), true, "Attack succeeded", r.getTransactionHash(),
-                r.getBlockNumber().longValue(), r.getGasUsed().longValue());
+                before, after, true, "Attack succeeded", r.getTransactionHash(),
+                r.getBlockNumber().longValue(), r.getGasUsed().longValue(), detect(address, dueAt, after));
+    }
+
+    /**
+     * Runs the same loan check My loans uses (ChainVerifier) on this contract, against the record CampusVault's
+     * database would hold: the loan as the operator created it, still open, because the attack never went through
+     * the app. Then applies the same rule as verifying a return: a mismatch refuses settlement.
+     */
+    private Detection detect(String address, long dueAt, State after) {
+        ChainVerifier.Check check = verifier.loanAt(address, LOAN, ASSET, BORROWER, DEPOSIT, dueAt, true);
+        boolean refused = check.status() == ChainVerifier.Status.MISMATCH;
+        return new Detection("On loan (open)", after.loanOpen() ? "Open" : "Closed",
+                check.status(), check.detail(), refused,
+                refused ? LoanService.settleRefusal(check) : "Verify return allowed: the loan matches the blockchain.");
     }
 
     private State state(String address) {

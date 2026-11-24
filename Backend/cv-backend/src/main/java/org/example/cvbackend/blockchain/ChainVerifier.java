@@ -137,8 +137,15 @@ public class ChainVerifier {
      * CampusVault - the signature of the access-control attack in contracts/attack/CampusVaultVulnerable.sol.
      */
     public Check loan(Loan l) {
+        return loanAt(chain.contractAddress(), l.getId(), l.getAsset().getId(), l.getBorrower().getId(),
+                l.getDeposit(), l.getDueAt().getEpochSecond(), l.getStatus() == Loan.Status.OPEN);
+    }
+
+    /** The loan check against a given CampusVault contract; the Security lab uses it on its throwaway copies. */
+    public Check loanAt(String contract, long loanId, long expectedAssetId, long expectedBorrowerId,
+                        long expectedDeposit, long expectedDueAt, boolean openHere) {
         try {
-            List<Type> out = chain.callView(chain.contractAddress(), new Function("loans", List.of(u(l.getId())),
+            List<Type> out = chain.callView(contract, new Function("loans", List.of(u(loanId)),
                     List.of(new TypeReference<Uint256>() {}, new TypeReference<Uint256>() {}, new TypeReference<Uint256>() {},
                             new TypeReference<Uint256>() {}, new TypeReference<Bool>() {}, new TypeReference<Bool>() {})));
             long assetId = ((BigInteger) out.get(0).getValue()).longValue();
@@ -146,11 +153,10 @@ public class ChainVerifier {
             long deposit = ((BigInteger) out.get(2).getValue()).longValue();
             long dueAt = ((BigInteger) out.get(3).getValue()).longValue();
             boolean openOnChain = (Boolean) out.get(4).getValue();
-            boolean openHere = l.getStatus() == Loan.Status.OPEN;
 
             if (assetId == 0) return Check.bad("This loan isn't on the blockchain.");
-            if (assetId != l.getAsset().getId() || borrowerId != l.getBorrower().getId()
-                    || deposit != l.getDeposit() || dueAt != l.getDueAt().getEpochSecond()) {
+            if (assetId != expectedAssetId || borrowerId != expectedBorrowerId
+                    || deposit != expectedDeposit || dueAt != expectedDueAt) {
                 return Check.bad("The loan's details were changed after they were recorded.");
             }
             if (openHere && !openOnChain) {
