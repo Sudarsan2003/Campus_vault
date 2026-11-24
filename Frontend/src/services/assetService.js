@@ -5,6 +5,7 @@ export const assetService = {
   create: async (payload) => (await api.post('/assets', payload)).data,
   verify: async (id) => (await api.post(`/admin/assets/${id}/verify`)).data,
   loans: async () => (await api.get('/loans/mine')).data,
+  securityDemo: async () => (await api.post('/admin/security-demo')).data,
   overdueLoans: async () => (await api.get('/admin/loans/overdue')).data,
   borrow: async (assetId, days) => (await api.post('/loans', { assetId, days })).data,
   returnLoan: async (id, damaged) => (await api.post(`/loans/${id}/return`, { damaged })).data,
